@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Kurt\Modules\Manager\Providers;
 
 use Kurt\Modules\Manager\Contracts\ScopeResolver;
+use Kurt\Modules\Manager\ModuleManager;
 use Kurt\Modules\Manager\Support\NullScopeResolver;
+use Kurt\Modules\Core\Contracts\ModuleRegistry;
 use Kurt\Modules\Core\Providers\PackageServiceProvider;
 use Spatie\LaravelPackageTools\Package;
 
@@ -27,5 +29,9 @@ final class ModulesManagerServiceProvider extends PackageServiceProvider
     public function packageRegistered(): void
     {
         $this->app->singleton(ScopeResolver::class, fn () => new NullScopeResolver());
+        $this->app->singleton(ModuleManager::class, fn ($app) => new ModuleManager(
+            $app->make(ModuleRegistry::class),
+            $app->make(ScopeResolver::class),
+        ));
     }
 }
