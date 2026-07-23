@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Kurt\Modules\Manager\Providers;
 
+use Illuminate\Routing\Router;
 use Kurt\Modules\Manager\Contracts\ScopeResolver;
+use Kurt\Modules\Manager\Http\Middleware\EnsureModuleEnabled;
 use Kurt\Modules\Manager\ModuleManager;
 use Kurt\Modules\Manager\Support\NullScopeResolver;
 use Kurt\Modules\Core\Contracts\ModuleRegistry;
@@ -31,6 +33,8 @@ final class ModulesManagerServiceProvider extends PackageServiceProvider
         parent::packageBooted();
 
         $this->registerModuleApi(__DIR__.'/../../routes/api.php');
+
+        $this->app->make(Router::class)->aliasMiddleware('module.enabled', EnsureModuleEnabled::class);
     }
 
     public function packageRegistered(): void
