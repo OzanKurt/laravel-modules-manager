@@ -15,4 +15,11 @@ abstract class TestCase extends PackageTestCase
     {
         return [ModulesManagerServiceProvider::class];
     }
+
+    protected function defineDatabaseMigrations(): void
+    {
+        parent::defineDatabaseMigrations();
+
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+    }
 }

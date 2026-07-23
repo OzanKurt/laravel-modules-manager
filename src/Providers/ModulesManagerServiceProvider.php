@@ -21,7 +21,7 @@ final class ModulesManagerServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-modules-manager')
             ->hasConfigFile('modules-manager')
-            ->hasMigration('create_module_states_table');
+            ->hasMigration('2026_07_23_000000_create_module_states_table');
     }
 
     public function packageRegistered(): void
