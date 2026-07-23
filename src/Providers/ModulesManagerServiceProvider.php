@@ -26,6 +26,13 @@ final class ModulesManagerServiceProvider extends PackageServiceProvider
             ->hasMigration('2026_07_23_000000_create_module_states_table');
     }
 
+    public function packageBooted(): void
+    {
+        parent::packageBooted();
+
+        $this->registerModuleApi(__DIR__.'/../../routes/api.php');
+    }
+
     public function packageRegistered(): void
     {
         $this->app->singleton(ScopeResolver::class, fn () => new NullScopeResolver());
