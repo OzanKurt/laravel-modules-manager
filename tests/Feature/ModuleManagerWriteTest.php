@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Kurt\Modules\Core\Contracts\ModuleRegistry;
 use Kurt\Modules\Core\Modules\ModuleManifest;
 use Kurt\Modules\Manager\Exceptions\UnknownModuleTarget;
+use Kurt\Modules\Manager\Models\ModuleState;
 use Kurt\Modules\Manager\ModuleManager;
 use Kurt\Modules\Manager\Support\Scope;
 
@@ -32,7 +33,7 @@ it('upserts rather than duplicating on repeated writes', function () {
     $m->setEnabled('blog', false);
     $m->setEnabled('blog', true);
 
-    expect(\Kurt\Modules\Manager\Models\ModuleState::where('module', 'blog')->where('kind', 'state')->count())->toBe(1)
+    expect(ModuleState::where('module', 'blog')->where('kind', 'state')->count())->toBe(1)
         ->and($m->enabled('blog'))->toBeTrue();
 });
 
