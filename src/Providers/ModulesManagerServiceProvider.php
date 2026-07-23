@@ -33,5 +33,6 @@ final class ModulesManagerServiceProvider extends PackageServiceProvider
             $app->make(ModuleRegistry::class),
             $app->make(ScopeResolver::class),
         ));
+        $this->app->alias(ModuleManager::class, 'modules-manager');
     }
 }
