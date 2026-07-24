@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kurt\Modules\Manager\Providers;
 
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Routing\Router;
 use Kurt\Modules\Core\Contracts\ModuleRegistry;
 use Kurt\Modules\Core\Providers\PackageServiceProvider;
@@ -40,10 +42,21 @@ final class ModulesManagerServiceProvider extends PackageServiceProvider
     public function packageRegistered(): void
     {
         $this->app->singleton(ScopeResolver::class, fn () => new NullScopeResolver);
-        $this->app->singleton(ModuleManager::class, fn ($app) => new ModuleManager(
-            $app->make(ModuleRegistry::class),
-            $app->make(ScopeResolver::class),
-        ));
+        $this->app->singleton(ModuleManager::class, function ($app) {
+            /** @var ConfigRepository $config */
+            $config = $app->make('config');
+
+            $store = $config->get('modules-manager.cache.store');
+
+            return new ModuleManager(
+                $app->make(ModuleRegistry::class),
+                $app->make(ScopeResolver::class),
+                $app->make(CacheFactory::class)->store(is_string($store) ? $store : null),
+                (bool) $config->get('modules-manager.cache.enabled', true),
+                (string) $config->get('modules-manager.cache.prefix', 'modules-manager'),
+                (int) $config->get('modules-manager.cache.ttl', 3600),
+            );
+        });
         $this->app->alias(ModuleManager::class, 'modules-manager');
     }
 }

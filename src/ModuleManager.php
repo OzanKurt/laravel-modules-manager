@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kurt\Modules\Manager;
 
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Kurt\Modules\Core\Contracts\ModuleRegistry;
 use Kurt\Modules\Manager\Contracts\ScopeResolver;
 use Kurt\Modules\Manager\Exceptions\UnknownModuleTarget;
@@ -12,9 +13,20 @@ use Kurt\Modules\Manager\Support\Scope;
 
 final class ModuleManager
 {
+    /**
+     * Cached under a row's exact identity in place of `null` when the DB has no
+     * row: distinguishes "known absent" (skip the query) from a cache miss. A
+     * stored row is always an array, so this string can never collide with one.
+     */
+    private const ABSENT = '__module_state_absent__';
+
     public function __construct(
         private readonly ModuleRegistry $registry,
         private readonly ScopeResolver $scopes,
+        private readonly CacheRepository $cache,
+        private readonly bool $cacheEnabled,
+        private readonly string $cachePrefix,
+        private readonly int $cacheTtl,
     ) {}
 
     public function enabled(string $slug, ?Scope $scope = null): bool
@@ -85,17 +97,23 @@ final class ModuleManager
     private function put(string $slug, string $kind, ?string $key, mixed $value, ?Scope $scope): void
     {
         $scope ??= $this->scopes->current();
+        $scopeType = $scope?->type;
+        $scopeId = $scope === null ? null : (string) $scope->id;
 
         ModuleState::query()->updateOrCreate(
             [
-                'scope_type' => $scope?->type,
-                'scope_id' => $scope === null ? null : (string) $scope->id,
+                'scope_type' => $scopeType,
+                'scope_id' => $scopeId,
                 'module' => $slug,
                 'kind' => $kind,
                 'key' => $key,
             ],
             ['value' => ['v' => $value]],
         );
+
+        if ($this->cacheEnabled) {
+            $this->cache->forget($this->cacheKey($slug, $kind, $key, $scopeType, $scopeId));
+        }
     }
 
     /**
@@ -119,8 +137,39 @@ final class ModuleManager
         return $global === null ? null : ($global['v'] ?? null);
     }
 
-    /** @return array<string, mixed>|null */
+    /**
+     * The stored row for one exact identity, served from cache when enabled. The
+     * cache maps 1:1 to a DB row identity, so it stays coherent as long as
+     * {@see put()} forgets the identity it writes.
+     *
+     * @return array<string, mixed>|null
+     */
     private function row(string $slug, string $kind, ?string $key, ?string $scopeType, ?string $scopeId): ?array
+    {
+        if (! $this->cacheEnabled) {
+            return $this->fetchRow($slug, $kind, $key, $scopeType, $scopeId);
+        }
+
+        $cacheKey = $this->cacheKey($slug, $kind, $key, $scopeType, $scopeId);
+        $cached = $this->cache->get($cacheKey);
+
+        if ($cached === self::ABSENT) {
+            return null;
+        }
+
+        if (is_array($cached)) {
+            /** @var array<string, mixed> $cached */
+            return $cached;
+        }
+
+        $row = $this->fetchRow($slug, $kind, $key, $scopeType, $scopeId);
+        $this->cache->put($cacheKey, $row ?? self::ABSENT, $this->cacheTtl);
+
+        return $row;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function fetchRow(string $slug, string $kind, ?string $key, ?string $scopeType, ?string $scopeId): ?array
     {
         /** @var ModuleState|null $state */
         $state = ModuleState::query()
@@ -132,5 +181,21 @@ final class ModuleManager
             ->first();
 
         return $state?->value;
+    }
+
+    /** Deterministic cache key for one exact row identity, with a stable token for nulls. */
+    private function cacheKey(string $slug, string $kind, ?string $key, ?string $scopeType, ?string $scopeId): string
+    {
+        $token = static fn (?string $part): string => $part ?? '__NULL__';
+
+        return sprintf(
+            '%s:%s|%s|%s|%s|%s',
+            $this->cachePrefix,
+            $token($scopeType),
+            $token($scopeId),
+            $slug,
+            $kind,
+            $token($key),
+        );
     }
 }
